@@ -136,6 +136,7 @@ class Bora(Observable):
         trust_window_size: int = 3,
         random_seed: int = 0,
         save_prompts: bool = False,
+        init_method: str = "llm",
     ):
         """
         Parameters
@@ -179,7 +180,14 @@ class Bora(Observable):
 
         save_prompts : bool, optional (default=False)
             Whether to save the prompts.
+
+        init_method : str, optional (default="llm")
+            How to generate initial points. ``"llm"`` uses the LLM assistant
+            (original behaviour), ``"lhs"`` uses Latin Hypercube Sampling,
+            ``"sobol"`` uses a Sobol sequence.
         """
+        self._init_method = init_method
+        self._seed = random_seed
         self._random_state = ensure_rng(random_seed)
         self._allow_duplicate_points = allow_duplicate_points
         self._experiment = experiment
@@ -410,7 +418,34 @@ class Bora(Observable):
         if self._queue.empty and self._space.empty:
             n_init_points = max(n_init_points, 2)
 
-        # Get the points from the assistant through the pre-optimization comment
+        if self._init_method in ("lhs", "sobol"):
+            # Deterministic design (same as BO-EI baselines)
+            self._assistant._experiment_overview = (
+                f"Initial design: {n_init_points} points via {self._init_method.upper()}"
+            )
+            from llmbo.utils.initial_design import generate_initial_points
+
+            X_unit = generate_initial_points(
+                n_params=self._space.dim,
+                n_init=n_init_points,
+                seed=self._seed,
+                method=self._init_method,
+            ).numpy()
+            bounds = self._space.bounds  # (dim, 2)
+            X_real = bounds[:, 0] + X_unit * (bounds[:, 1] - bounds[:, 0])
+
+            for i, x in enumerate(X_real):
+                self._queue.add(x)
+                self._hypothesis_names.append("None")
+                self._hypothesis_records[i + 1] = {
+                    "trust_score": "N/A",
+                    "plateau_duration": "N/A",
+                    "hypothesis": self._init_method,
+                    "point": "[" + ", ".join(map(str, x)) + "]",
+                }
+            return
+
+        # Default: get points from the LLM assistant
         comment = self._assistant.pre_optimization_comment(
             n_hypotheses=n_init_points,
         )
