@@ -25,6 +25,17 @@ MODEL_INFOS = {
         "completion_tokens_price_per_1k": 0.0006,
         "max_tokens": 128_000,
     },
+    # Local / open-source models — no API cost
+    "qwen3:14b": {
+        "prompt_tokens_price_per_1k": 0.0,
+        "completion_tokens_price_per_1k": 0.0,
+        "max_tokens": 32_768,
+    },
+    "qwen2.5:14b": {
+        "prompt_tokens_price_per_1k": 0.0,
+        "completion_tokens_price_per_1k": 0.0,
+        "max_tokens": 32_768,
+    },
 }
 
 
@@ -177,7 +188,8 @@ class Comment(BaseComment):
         # Initialize the OpenAI API client
         self._model = llm_model
         self._temperature = temperature
-        self._client = OpenAI(api_key=api_key)
+        _base_url = os.environ.get("OPENAI_BASE_URL") or None
+        self._client = OpenAI(api_key=api_key, base_url=_base_url)
         self._total_tokens = total_tokens
 
         self._comment = None
@@ -348,7 +360,8 @@ class Assistant:
         # Initialize the OpenAI API client
         # TODO hide the API key to pass to the Comment class
         self._api_key = api_key
-        self._client = OpenAI(api_key=self._api_key)
+        _base_url = os.environ.get("OPENAI_BASE_URL") or None
+        self._client = OpenAI(api_key=self._api_key, base_url=_base_url)
         self._model = llm_model
         self._model_info = self._get_model_info()
         self._temperature = temperature
